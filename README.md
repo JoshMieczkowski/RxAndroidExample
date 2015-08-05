@@ -1,2 +1,2 @@
 # RxAndroidExample
-An example of using RxJava
+An example using RxJava
