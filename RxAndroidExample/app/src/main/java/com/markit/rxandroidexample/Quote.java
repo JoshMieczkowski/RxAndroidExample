@@ -11,6 +11,8 @@ import com.squareup.okhttp.Response;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.concurrent.TimeUnit;
+
 import rx.Observable;
 import rx.Subscriber;
 import rx.android.schedulers.AndroidSchedulers;
@@ -21,6 +23,9 @@ import rx.schedulers.Schedulers;
  * Created by josh.mieczkowski on 8/4/2015.
  */
 public class Quote implements Parcelable {
+    private static final int NUMBER_OF_RETRIES = 5;
+    private static final int DELAY_IN_MS = 5000;
+
     private String symbol;
     private String name;
     private String exchange;
@@ -28,6 +33,15 @@ public class Quote implements Parcelable {
     private String change;
     private String changePercent;
     private String volume;
+
+    public static Observable<Quote> getQuoteWtihTimer(final String symbol){
+        return Observable.timer(0, 5, TimeUnit.SECONDS).concatMap(new Func1<Long, Observable<Quote>>() {
+            @Override
+            public Observable<Quote> call(Long aLong) {
+                return getQuote(symbol);
+            }
+        });
+    }
 
     public static Observable<Quote> getQuote(final String symbol){
         return Observable.create(new Observable.OnSubscribe<JSONObject>() {
@@ -41,6 +55,7 @@ public class Quote implements Parcelable {
 
                 try {
                     Response response = client.newCall(request).execute();
+                    //TODO: Replace with Jackson
                     JSONObject jsonObject = new JSONObject(response.body().string());
                     if(!jsonObject.isNull("query")) {
                         JSONObject jsonQuery = jsonObject.getJSONObject("query");
@@ -90,7 +105,8 @@ public class Quote implements Parcelable {
             }
         })
                 .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread());
+                .observeOn(AndroidSchedulers.mainThread())
+                .retryWhen(new RetryWithDelay(NUMBER_OF_RETRIES, DELAY_IN_MS));
     }
 
     public String getSymbol() {
