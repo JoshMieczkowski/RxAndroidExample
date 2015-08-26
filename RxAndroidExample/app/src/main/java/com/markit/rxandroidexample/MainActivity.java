@@ -1,11 +1,9 @@
 package com.markit.rxandroidexample;
 
+import android.os.Bundle;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -13,17 +11,12 @@ import android.widget.EditText;
 import android.widget.ListView;
 
 import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import rx.Observable;
 import rx.Observer;
-import rx.Subscription;
-import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Func1;
 import rx.observables.ConnectableObservable;
-import rx.schedulers.Schedulers;
 import rx.subscriptions.CompositeSubscription;
 
 public class MainActivity extends AppCompatActivity {
@@ -34,7 +27,7 @@ public class MainActivity extends AppCompatActivity {
 
     private CompositeSubscription compositeSubscription = new CompositeSubscription();
     private Quote quote = null;
-    private ConnectableObservable connectableObservable;
+    private ConnectableObservable<Quote> connectableObservable;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

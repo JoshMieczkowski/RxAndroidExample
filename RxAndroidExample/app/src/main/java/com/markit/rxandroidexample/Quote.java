@@ -1,16 +1,19 @@
 package com.markit.rxandroidexample;
 
+import android.net.Uri;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.util.Log;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.markit.rxandroidexample.utilities.JacksonParser;
+import com.markit.rxandroidexample.utilities.OkHttpSingleton;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
 
-import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 import rx.Observable;
@@ -26,12 +29,25 @@ public class Quote implements Parcelable {
     private static final int NUMBER_OF_RETRIES = 5;
     private static final int DELAY_IN_MS = 5000;
 
+    @JsonProperty("Symbol")
     private String symbol;
+
+    @JsonProperty("Name")
     private String name;
+
+    @JsonProperty("StockExchange")
     private String exchange;
+
+    @JsonProperty("Bid")
     private String lastPrice;
+
+    @JsonProperty("Change")
     private String change;
+
+    @JsonProperty("Change_PercentChange")
     private String changePercent;
+
+    @JsonProperty("Volume")
     private String volume;
 
     public static Observable<Quote> getQuoteWtihTimer(final String symbol){
@@ -43,20 +59,52 @@ public class Quote implements Parcelable {
         });
     }
 
-    public static Observable<Quote> getQuote(final String symbol){
-        return Observable.create(new Observable.OnSubscribe<JSONObject>() {
+    public static Observable<String> getJSON(final String url){
+        return Observable.create(new Observable.OnSubscribe<String>() {
             @Override
-            public void call(Subscriber<? super JSONObject> subscriber) {
-                OkHttpClient client = new OkHttpClient();
+            public void call(Subscriber<? super String> subscriber) {
+                OkHttpClient client = OkHttpSingleton.getInstance().getOkHttpClient();
                 Request request = new Request.Builder()
-                        .url("https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20yahoo.finance.quotes%20where%20symbol%20in%20(%22 "
-                                + symbol + "%22)&format=json&diagnostics=true&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&callback=")
+                        .url(url)
                         .build();
 
                 try {
                     Response response = client.newCall(request).execute();
-                    //TODO: Replace with Jackson
-                    JSONObject jsonObject = new JSONObject(response.body().string());
+                    subscriber.onNext(response.body().string());
+                    subscriber.onCompleted();
+
+                } catch (Exception e) {
+                    subscriber.onError(e);
+                }
+
+            }
+        }).filter(new Func1<String, Boolean>() {
+            @Override
+            public Boolean call(String json) {
+                return json != null;
+            }
+        });
+    }
+
+    public static Observable<Quote> getQuote(String symbol){
+        Uri.Builder builder = new Uri.Builder();
+        builder.scheme("https")
+                .authority("query.yahooapis.com")
+                .appendPath("v1")
+                .appendPath("public")
+                .appendPath("yql")
+                .appendQueryParameter("q", "select * from yahoo.finance.quotes where symbol in (%22"
+                        + symbol + "%22)")
+                .appendQueryParameter("format", "json")
+                .appendQueryParameter("diagnostics", "true")
+                .appendQueryParameter("env", "store%3A%2F%2Fdatatables.org%2Falltableswithkeys")
+                .appendQueryParameter("callback", "");
+
+        return getJSON(builder.build().toString()).map(new Func1<String, String>() {
+            @Override
+            public String call(String json) {
+                try {
+                    JSONObject jsonObject = new JSONObject(json);
                     if(!jsonObject.isNull("query")) {
                         JSONObject jsonQuery = jsonObject.getJSONObject("query");
                         if(!jsonQuery.isNull("results")){
@@ -64,39 +112,30 @@ public class Quote implements Parcelable {
                             if(!jsonResults.isNull("quote")){
                                 JSONObject jsonQuote = jsonResults.getJSONObject("quote");
                                 if(!jsonQuote.isNull("Bid")) {
-                                    subscriber.onNext(jsonQuote);
-                                    subscriber.onCompleted();
+                                    return jsonQuote.toString();
                                 }
                             }
                         }
 
                     }
-                    subscriber.onError(new Throwable("Not a valid symbol"));
-                } catch (Exception e) {
-                    subscriber.onError(e);
+
+                    throw new Throwable("Not a valid symbol");
+                } catch (Throwable throwable) {
+                    throwable.printStackTrace();
                 }
-
+                return null;
             }
-        }).map(new Func1<JSONObject, Quote>() {
+        }).map(new Func1<String, Quote>() {
+
             @Override
-            public Quote call(JSONObject json) {
+            public Quote call(String json) {
+                Quote quote = null;
                 try {
-                    Quote quote = new Quote();
-                    quote.setSymbol(json.getString("Symbol"));
-                    quote.setName(json.getString("Name"));
-                    quote.setExchange(json.getString("StockExchange"));
-                    quote.setLastPrice(json.getString("Bid"));
-                    quote.setChange(json.getString("Change"));
-                    quote.setChangePercent(json.getString("Change_PercentChange"));
-                    quote.setVolume(json.getString("Volume"));
-
-                    return quote;
-
-                } catch (JSONException e) {
+                    quote = JacksonParser.getInstance().getObjectMapper().readValue(json, Quote.class);
+                } catch (IOException e) {
                     e.printStackTrace();
                 }
-
-                return null;
+                return quote;
             }
         }).filter(new Func1<Quote, Boolean>() {
             @Override
